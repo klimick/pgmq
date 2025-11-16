@@ -189,4 +189,23 @@ final readonly class Queue
             visibilityTimeout: $visibilityTimeout,
         );
     }
+
+    /**
+     * @return non-empty-string
+     */
+    public function enableNotifyInsert(): string
+    {
+        return enableNotifyInsert(
+            pg: $this->pg,
+            queue: $this->name,
+        );
+    }
+
+    public function disableNotifyInsert(): void
+    {
+        disableNotifyInsert(
+            pg: $this->pg,
+            queue: $this->name,
+        );
+    }
 }

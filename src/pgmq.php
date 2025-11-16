@@ -423,7 +423,6 @@ function deleteBatch(
 
 /**
  * @api
- * @phpstan-import-type RawMessage from Supervisor
  * @param non-empty-string $queue
  */
 function setVisibilityTimeout(
@@ -441,4 +440,42 @@ function setVisibilityTimeout(
         ->fetchRow();
 
     return $row !== null ? Message::fromArray($row) : null;
+}
+
+/**
+ * @api
+ * @param non-empty-string $queue
+ * @return non-empty-string
+ */
+function enableNotifyInsert(
+    PostgresLink $pg,
+    string $queue,
+): string {
+    $pg->execute('SELECT pgmq.enable_notify_insert(:queue_name)', [
+        'queue_name' => $queue,
+    ]);
+
+    return channelName($queue);
+}
+
+/**
+ * @api
+ * @param non-empty-string $queue
+ */
+function disableNotifyInsert(
+    PostgresLink $pg,
+    string $queue,
+): void {
+    $pg->execute('SELECT pgmq.disable_notify_insert(:queue_name)', [
+        'queue_name' => $queue,
+    ]);
+}
+
+/**
+ * @param non-empty-string $queue
+ * @return non-empty-string
+ */
+function channelName(string $queue): string
+{
+    return "pgmq.q_{$queue}.INSERT";
 }

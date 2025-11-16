@@ -262,6 +262,15 @@ final class PgmqTest extends TestCase
         self::assertSame(0, $queue->metrics()->length);
     }
 
+    public function testEnableDisableNotifies(): void
+    {
+        $queue = $this->supervisor->createQueue($this->randomQueueName());
+
+        self::assertSame(channelName($queue->name), $queue->enableNotifyInsert());
+
+        $queue->disableNotifyInsert();
+    }
+
     /**
      * @return non-empty-string
      */
