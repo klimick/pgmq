@@ -32,7 +32,7 @@ final class PgmqTest extends TestCase
         $this->supervisor = Supervisor::fromDsn($dsn);
 
         foreach ($this->supervisor->listQueues() as $queue) {
-            $this->supervisor->dropQueue($queue->name);
+            $queue->drop();
         }
     }
 

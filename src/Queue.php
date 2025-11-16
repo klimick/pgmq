@@ -22,12 +22,18 @@ final readonly class Queue
 
     public function drop(): bool
     {
-        return dropQueue($this->pg, $this->name);
+        return dropQueue(
+            pg: $this->pg,
+            queue: $this->name,
+        );
     }
 
     public function purge(): int
     {
-        return purgeQueue($this->pg, $this->name);
+        return purgeQueue(
+            pg: $this->pg,
+            queue: $this->name,
+        );
     }
 
     /**
@@ -35,7 +41,10 @@ final readonly class Queue
      */
     public function metrics(): QueueMetric
     {
-        return queueMetrics($this->pg, $this->name);
+        return queueMetrics(
+            pg: $this->pg,
+            queue: $this->name,
+        );
     }
 
     /**
@@ -43,7 +52,10 @@ final readonly class Queue
      */
     public function metadata(): QueueMetadata
     {
-        return queueMetadata($this->pg, $this->name);
+        return queueMetadata(
+            pg: $this->pg,
+            queue: $this->name,
+        );
     }
 
     /**
@@ -51,7 +63,12 @@ final readonly class Queue
      */
     public function send(SendMessage $message, null|TimeSpan|\DateTimeImmutable $delay = null): int
     {
-        return send($this->pg, $this->name, $message, $delay);
+        return send(
+            pg: $this->pg,
+            queue: $this->name,
+            message: $message,
+            delay: $delay,
+        );
     }
 
     /**
@@ -60,7 +77,12 @@ final readonly class Queue
      */
     public function sendBatch(array $messages, null|TimeSpan|\DateTimeImmutable $delay = null): array
     {
-        return sendBatch($this->pg, $this->name, $messages, $delay);
+        return sendBatch(
+            pg: $this->pg,
+            queue: $this->name,
+            messages: $messages,
+            delay: $delay,
+        );
     }
 
     /**
@@ -73,12 +95,23 @@ final readonly class Queue
         ?TimeSpan $maxPoll = null,
         ?TimeSpan $pollInterval = null,
     ): iterable {
-        return readPoll($this->pg, $this->name, $batch, $visibilityTimeout, $maxPoll, $pollInterval);
+        return readPoll(
+            pg: $this->pg,
+            queue: $this->name,
+            batch: $batch,
+            visibilityTimeout: $visibilityTimeout,
+            maxPoll: $maxPoll,
+            pollInterval: $pollInterval,
+        );
     }
 
     public function read(?TimeSpan $visibilityTimeout = null): ?Message
     {
-        return read($this->pg, $this->name, $visibilityTimeout);
+        return read(
+            pg: $this->pg,
+            queue: $this->name,
+            visibilityTimeout: $visibilityTimeout,
+        );
     }
 
     /**
@@ -87,17 +120,29 @@ final readonly class Queue
      */
     public function readBatch(int $count, ?TimeSpan $visibilityTimeout = null): iterable
     {
-        return readBatch($this->pg, $this->name, $count, $visibilityTimeout);
+        return readBatch(
+            pg: $this->pg,
+            queue: $this->name,
+            count: $count,
+            visibilityTimeout: $visibilityTimeout,
+        );
     }
 
     public function pop(): ?Message
     {
-        return pop($this->pg, $this->name);
+        return pop(
+            pg: $this->pg,
+            queue: $this->name,
+        );
     }
 
     public function archive(int $messageId): bool
     {
-        return archive($this->pg, $this->name, $messageId);
+        return archive(
+            pg: $this->pg,
+            queue: $this->name,
+            messageId: $messageId,
+        );
     }
 
     /**
@@ -106,17 +151,20 @@ final readonly class Queue
      */
     public function archiveBatch(array $messageIds): array
     {
-        return archiveBatch($this->pg, $this->name, $messageIds);
-    }
-
-    public function detachArchive(): void
-    {
-        detachArchive($this->pg, $this->name);
+        return archiveBatch(
+            pg: $this->pg,
+            queue: $this->name,
+            messageIds: $messageIds,
+        );
     }
 
     public function delete(int $messageId): bool
     {
-        return delete($this->pg, $this->name, $messageId);
+        return delete(
+            pg: $this->pg,
+            queue: $this->name,
+            messageId: $messageId,
+        );
     }
 
     /**
@@ -125,11 +173,20 @@ final readonly class Queue
      */
     public function deleteBatch(array $messageIds): array
     {
-        return deleteBatch($this->pg, $this->name, $messageIds);
+        return deleteBatch(
+            pg: $this->pg,
+            queue: $this->name,
+            messageIds: $messageIds,
+        );
     }
 
     public function setVisibilityTimeout(int $messageId, TimeSpan $visibilityTimeout): ?Message
     {
-        return setVisibilityTimeout($this->pg, $this->name, $messageId, $visibilityTimeout);
+        return setVisibilityTimeout(
+            pg: $this->pg,
+            queue: $this->name,
+            messageId: $messageId,
+            visibilityTimeout: $visibilityTimeout,
+        );
     }
 }

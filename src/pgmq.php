@@ -85,12 +85,26 @@ function createPartitionedQueue(
  * @api
  * @return iterable<QueueMetadata>
  */
-function listQueues(PostgresLink $pg): iterable
+function listQueueMetadata(PostgresLink $pg): iterable
 {
     $result = $pg->query('SELECT queue_name, created_at, is_partitioned, is_unlogged FROM pgmq.list_queues()');
 
     foreach ($result as $row) {
         yield QueueMetadata::fromArray($row);
+    }
+}
+
+/**
+ * @api
+ * @return iterable<Queue>
+ */
+function listQueues(PostgresLink $pg): iterable
+{
+    $result = $pg->query('SELECT queue_name FROM pgmq.list_queues()');
+
+    /** @var array{queue_name: non-empty-string} $row */
+    foreach ($result as $row) {
+        yield new Queue($row['queue_name'], $pg);
     }
 }
 
@@ -367,19 +381,6 @@ function archiveBatch(
     }
 
     return $archive;
-}
-
-/**
- * @api
- * @param non-empty-string $queue
- */
-function detachArchive(
-    PostgresLink $pg,
-    string $queue,
-): void {
-    $pg->execute('SELECT pgmq.detach_archive(:queue_name);', [
-        'queue_name' => $queue,
-    ]);
 }
 
 /**
