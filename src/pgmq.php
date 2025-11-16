@@ -25,8 +25,8 @@ function validateQueueName(
     PostgresLink $pg,
     string $queue,
 ): void {
-    $pg->execute('SELECT pgmq.validate_queue_name($1);', [
-        $queue,
+    $pg->execute('SELECT pgmq.validate_queue_name(:queue_name);', [
+        'queue_name' => $queue,
     ]);
 }
 
@@ -38,8 +38,8 @@ function createQueue(
     PostgresLink $pg,
     string $queue,
 ): Queue {
-    $pg->execute('SELECT pgmq.create($1)', [
-        $queue,
+    $pg->execute('SELECT pgmq.create(:queue_name)', [
+        'queue_name' => $queue,
     ]);
 
     return new Queue($queue, $pg);
@@ -53,8 +53,8 @@ function createUnloggedQueue(
     PostgresLink $pg,
     string $queue,
 ): Queue {
-    $pg->execute('SELECT pgmq.create_unlogged($1)', [
-        $queue,
+    $pg->execute('SELECT pgmq.create_unlogged(:queue_name)', [
+        'queue_name' => $queue,
     ]);
 
     return new Queue($queue, $pg);
@@ -72,10 +72,10 @@ function createPartitionedQueue(
     int|string $partitionInterval,
     int|string $retentionInterval,
 ): Queue {
-    $pg->execute('SELECT pgmq.create($1, $2::text, $3::text)', [
-        $queue,
-        (string) $partitionInterval,
-        (string) $retentionInterval,
+    $pg->execute('SELECT pgmq.create(:queue_name, :partition_interval, :retention_interval)', [
+        'queue_name' => $queue,
+        'partition_interval' => (string) $partitionInterval,
+        'retention_interval' => (string) $retentionInterval,
     ]);
 
     return new Queue($queue, $pg);
@@ -104,7 +104,9 @@ function dropQueue(
 ): bool {
     /** @var array{drop_queue?: bool} $result */
     $result = $pg
-        ->execute('SELECT pgmq.drop_queue($1)', [$queue])
+        ->execute('SELECT pgmq.drop_queue(:queue_name)', [
+            'queue_name' => $queue,
+        ])
         ->fetchRow() ?? [];
 
     return $result['drop_queue'] ?? false;
@@ -120,7 +122,9 @@ function purgeQueue(
 ): int {
     /** @var array{purge_queue?: non-negative-int} $result */
     $result = $pg
-        ->execute('SELECT pgmq.purge_queue($1)', [$queue])
+        ->execute('SELECT pgmq.purge_queue(:queue_name)', [
+            'queue_name' => $queue,
+        ])
         ->fetchRow() ?? [];
 
     return $result['purge_queue'] ?? 0;
@@ -136,7 +140,9 @@ function queueMetrics(
     string $queue,
 ): QueueMetric {
     $result = $pg
-        ->execute('SELECT * FROM pgmq.metrics($1)', [$queue])
+        ->execute('SELECT * FROM pgmq.metrics(:queue_name)', [
+            'queue_name' => $queue,
+        ])
         ->fetchRow() ?? throw new QueueNotFound();
 
     return QueueMetric::fromArray($result);
@@ -152,7 +158,9 @@ function queueMetadata(
     string $queue,
 ): QueueMetadata {
     $result = $pg
-        ->execute('SELECT queue_name, created_at, is_partitioned, is_unlogged FROM pgmq.list_queues() WHERE queue_name = $1', [$queue])
+        ->execute('SELECT queue_name, created_at, is_partitioned, is_unlogged FROM pgmq.list_queues() WHERE queue_name = :queue_name', [
+            'queue_name' => $queue,
+        ])
         ->fetchRow() ?? throw new QueueNotFound();
 
     return QueueMetadata::fromArray($result);
@@ -174,28 +182,28 @@ function metrics(PostgresLink $pg): iterable
 /**
  * @api
  * @param non-empty-string $queue
- * @param non-empty-string $json
  * @return int the message id, unique to the queue, is returned
  */
 function send(
     PostgresLink $pg,
     string $queue,
-    string $json,
+    SendMessage $message,
     null|TimeSpan|\DateTimeImmutable $delay = null,
 ): int {
     $delay ??= TimeSpan::fromSeconds(0);
 
     $sql = match (true) {
-        $delay instanceof TimeSpan => 'SELECT * FROM pgmq.send($1, $2, $3::int)',
-        default => 'SELECT * FROM pgmq.send($1, $2, $3::timestamptz)',
+        $delay instanceof TimeSpan => 'SELECT * FROM pgmq.send(:queue_name, :msg, :headers, :delay::int)',
+        default => 'SELECT * FROM pgmq.send(:queue_name, :msg, :headers, :delay::timestamptz)',
     };
 
     /** @var array{send: int} $result */
     $result = $pg
         ->execute($sql, [
-            $queue,
-            $json,
-            $delay instanceof TimeSpan ? (int) $delay->toSeconds(PHP_ROUND_HALF_UP) : $delay->format(\DateTimeInterface::RFC3339),
+            'queue_name' => $queue,
+            'msg' => $message->valueJson,
+            'headers' => $message->headerJson,
+            'delay' => $delay instanceof TimeSpan ? (int) $delay->toSeconds(PHP_ROUND_HALF_UP) : $delay->format(\DateTimeInterface::RFC3339),
         ])
         ->fetchRow() ?? throw new \RuntimeException("Failed to send message to the queue {$queue}.");
 
@@ -205,7 +213,7 @@ function send(
 /**
  * @api
  * @param non-empty-string $queue
- * @param non-empty-list<non-empty-string> $messages
+ * @param non-empty-list<SendMessage> $messages
  * @return list<int>
  */
 function sendBatch(
@@ -217,14 +225,15 @@ function sendBatch(
     $delay ??= TimeSpan::fromSeconds(0);
 
     $sql = match (true) {
-        $delay instanceof TimeSpan => 'SELECT * FROM pgmq.send_batch($1, $2::jsonb[], $3::int)',
-        default => 'SELECT * FROM pgmq.send_batch($1, $2::jsonb[], $3::timestamptz)',
+        $delay instanceof TimeSpan => 'SELECT * FROM pgmq.send_batch(:queue_name, :msgs::jsonb[], :headers::jsonb[], :delay::int)',
+        default => 'SELECT * FROM pgmq.send_batch(:queue_name, :msgs::jsonb[], :headers::jsonb[], :delay::timestamptz)',
     };
 
     $result = $pg->execute($sql, [
-        $queue,
-        $messages,
-        $delay instanceof TimeSpan ? $delay->toSeconds(PHP_ROUND_HALF_UP) : $delay->format(\DateTimeInterface::RFC3339),
+        'queue_name' => $queue,
+        'msgs' => array_map(static fn(SendMessage $message): string => $message->valueJson, $messages),
+        'headers' => array_map(static fn(SendMessage $message): ?string => $message->headerJson, $messages),
+        'delay' => $delay instanceof TimeSpan ? $delay->toSeconds(PHP_ROUND_HALF_UP) : $delay->format(\DateTimeInterface::RFC3339),
     ]);
 
     $messageIds = [];
@@ -251,12 +260,12 @@ function readPoll(
     ?TimeSpan $maxPoll = null,
     ?TimeSpan $pollInterval = null,
 ): iterable {
-    $result = $pg->execute('SELECT * FROM pgmq.read_with_poll($1, $2, $3, $4, $5);', [
-        $queue,
-        ($visibilityTimeout ?? TimeSpan::fromSeconds(30))->toSeconds(PHP_ROUND_HALF_UP),
-        $batch,
-        ($maxPoll ?? TimeSpan::fromSeconds(5))->toSeconds(PHP_ROUND_HALF_UP),
-        ($pollInterval ?? TimeSpan::fromMilliseconds(100))->toMilliseconds(PHP_ROUND_HALF_UP),
+    $result = $pg->execute('SELECT * FROM pgmq.read_with_poll(:queue_name, :vt, :limit, :poll_timeout_s, :poll_interval_ms);', [
+        'queue_name' => $queue,
+        'vt' => ($visibilityTimeout ?? TimeSpan::fromSeconds(30))->toSeconds(PHP_ROUND_HALF_UP),
+        'limit' => $batch,
+        'poll_timeout_s' => ($maxPoll ?? TimeSpan::fromSeconds(5))->toSeconds(PHP_ROUND_HALF_UP),
+        'poll_interval_ms' => ($pollInterval ?? TimeSpan::fromMilliseconds(250))->toMilliseconds(PHP_ROUND_HALF_UP),
     ]);
 
     foreach ($result as $row) {
@@ -294,10 +303,10 @@ function readBatch(
 ): iterable {
     $visibilityTimeout ??= TimeSpan::fromSeconds(30);
 
-    $result = $pg->execute('SELECT * FROM pgmq.read($1, $2, $3)', [
-        $queue,
-        $visibilityTimeout->toSeconds(PHP_ROUND_HALF_UP),
-        $count,
+    $result = $pg->execute('SELECT * FROM pgmq.read(:queue_name, :vt, :limit)', [
+        'queue_name' => $queue,
+        'vt' => $visibilityTimeout->toSeconds(PHP_ROUND_HALF_UP),
+        'limit' => $count,
     ]);
 
     foreach ($result as $row) {
@@ -314,8 +323,8 @@ function pop(
     string $queue,
 ): ?Message {
     $row = $pg
-        ->execute('SELECT * FROM pgmq.pop($1)', [
-            $queue,
+        ->execute('SELECT * FROM pgmq.pop(:queue_name)', [
+            'queue_name' => $queue,
         ])
         ->fetchRow();
 
@@ -345,9 +354,9 @@ function archiveBatch(
     string $queue,
     array $messageIds,
 ): array {
-    $result = $pg->execute('SELECT * FROM pgmq.archive($1, $2::bigint[])', [
-        $queue,
-        $messageIds,
+    $result = $pg->execute('SELECT * FROM pgmq.archive(:queue_name, :msg_ids::bigint[])', [
+        'queue_name' => $queue,
+        'msg_ids' => $messageIds,
     ]);
 
     $archive = [];
@@ -368,7 +377,9 @@ function detachArchive(
     PostgresLink $pg,
     string $queue,
 ): void {
-    $pg->execute('SELECT pgmq.detach_archive(%1);', [$queue]);
+    $pg->execute('SELECT pgmq.detach_archive(:queue_name);', [
+        'queue_name' => $queue,
+    ]);
 }
 
 /**
@@ -394,9 +405,9 @@ function deleteBatch(
     string $queue,
     array $messageIds,
 ): array {
-    $result = $pg->execute('SELECT pgmq.delete($1, $2::bigint[])', [
-        $queue,
-        $messageIds,
+    $result = $pg->execute('SELECT pgmq.delete(:queue_name, :msg_ids::bigint[])', [
+        'queue_name' => $queue,
+        'msg_ids' => $messageIds,
     ]);
 
     $deleted = [];
@@ -421,10 +432,10 @@ function setVisibilityTimeout(
     TimeSpan $visibilityTimeout,
 ): ?Message {
     $row = $pg
-        ->execute('SELECT * FROM pgmq.set_vt($1, $2::bigint, $3::int)', [
-            $queue,
-            $messageId,
-            $visibilityTimeout->toSeconds(PHP_ROUND_HALF_UP),
+        ->execute('SELECT * FROM pgmq.set_vt(:queue_name, :msg_id::bigint, :vt::int)', [
+            'queue_name' => $queue,
+            'msg_id' => $messageId,
+            'vt' => $visibilityTimeout->toSeconds(PHP_ROUND_HALF_UP),
         ])
         ->fetchRow();
 

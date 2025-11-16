@@ -47,16 +47,15 @@ final readonly class Queue
     }
 
     /**
-     * @param non-empty-string $json
      * @return int the message id, unique to the queue, is returned
      */
-    public function send(string $json, null|TimeSpan|\DateTimeImmutable $delay = null): int
+    public function send(SendMessage $message, null|TimeSpan|\DateTimeImmutable $delay = null): int
     {
-        return send($this->pg, $this->name, $json, $delay);
+        return send($this->pg, $this->name, $message, $delay);
     }
 
     /**
-     * @param non-empty-list<non-empty-string> $messages
+     * @param non-empty-list<SendMessage> $messages
      * @return list<int>
      */
     public function sendBatch(array $messages, null|TimeSpan|\DateTimeImmutable $delay = null): array

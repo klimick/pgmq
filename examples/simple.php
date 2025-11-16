@@ -10,6 +10,6 @@ $supervisor = Pgmq\Supervisor::fromDsn('host=pgmq user=postgres password=postgre
 
 $queue = $supervisor->createQueue('messages');
 
-$queue->send('{"id": 1}');
+$queue->send(new Pgmq\SendMessage('{"id": 1}'));
 
 dump($queue->pop());

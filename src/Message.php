@@ -12,6 +12,7 @@ namespace Thesis\Pgmq;
  *      enqueued_at: non-empty-string,
  *      vt: non-empty-string,
  *      message: non-empty-string,
+ *      headers: ?non-empty-string,
  *  }
  */
 final readonly class Message
@@ -29,12 +30,14 @@ final readonly class Message
             enqueuedAt: new \DateTimeImmutable($row['enqueued_at']),
             value: $row['message'],
             visibilityTimeout: new \DateTimeImmutable($row['vt']),
+            headers: $row['headers'],
         );
     }
 
     /**
      * @param non-empty-string $value
      * @param non-negative-int $readCount
+     * @param ?non-empty-string $headers
      */
     public function __construct(
         public int $id,
@@ -42,5 +45,6 @@ final readonly class Message
         public \DateTimeImmutable $enqueuedAt,
         public string $value,
         public \DateTimeImmutable $visibilityTimeout,
+        public ?string $headers = null,
     ) {}
 }

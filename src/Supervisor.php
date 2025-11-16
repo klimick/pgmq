@@ -123,17 +123,16 @@ final readonly class Supervisor
 
     /**
      * @param non-empty-string $queue
-     * @param non-empty-string $json
      * @return int the message id, unique to the queue, is returned
      */
-    public function send(string $queue, string $json, null|TimeSpan|\DateTimeImmutable $delay = null): int
+    public function send(string $queue, SendMessage $message, null|TimeSpan|\DateTimeImmutable $delay = null): int
     {
-        return send($this->pg, $queue, $json, $delay);
+        return send($this->pg, $queue, $message, $delay);
     }
 
     /**
      * @param non-empty-string $queue
-     * @param non-empty-list<non-empty-string> $messages
+     * @param non-empty-list<SendMessage> $messages
      * @return list<int>
      */
     public function sendBatch(string $queue, array $messages, null|TimeSpan|\DateTimeImmutable $delay = null): array

@@ -15,6 +15,7 @@ use function Amp\delay;
 final class PgmqTest extends TestCase
 {
     private const string TESTING_MESSAGE = '{"ping": "pong"}';
+    private const string TESTING_HEADERS = '{"x": "y"}';
 
     private Supervisor $supervisor;
 
@@ -100,19 +101,20 @@ final class PgmqTest extends TestCase
     {
         $queue = $this->supervisor->createQueue($this->randomQueueName());
 
-        $messageId = $queue->send(self::TESTING_MESSAGE);
+        $messageId = $queue->send(new SendMessage(self::TESTING_MESSAGE, self::TESTING_HEADERS));
 
         $message = $queue->read(TimeSpan::fromSeconds(20));
         self::assertNotNull($message);
         self::assertSame($messageId, $message->id);
         self::assertSame(self::TESTING_MESSAGE, $message->value);
+        self::assertSame(self::TESTING_HEADERS, $message->headers);
     }
 
     public function testSendAndReadDelayedMessage(): void
     {
         $queue = $this->supervisor->createQueue($this->randomQueueName());
 
-        $messageId = $queue->send(self::TESTING_MESSAGE, $delay = TimeSpan::fromSeconds(1));
+        $messageId = $queue->send(new SendMessage(self::TESTING_MESSAGE), delay: $delay = TimeSpan::fromSeconds(1));
 
         self::assertNull($queue->read());
 
@@ -129,7 +131,7 @@ final class PgmqTest extends TestCase
     {
         $queue = $this->supervisor->createQueue($this->randomQueueName());
 
-        $messageId = $queue->send(self::TESTING_MESSAGE, new \DateTimeImmutable('+1 seconds'));
+        $messageId = $queue->send(new SendMessage(self::TESTING_MESSAGE), delay: new \DateTimeImmutable('+1 seconds'));
 
         self::assertNull($queue->read());
 
@@ -146,7 +148,7 @@ final class PgmqTest extends TestCase
     {
         $queue = $this->supervisor->createQueue($this->randomQueueName());
 
-        $messageId = $queue->send(self::TESTING_MESSAGE);
+        $messageId = $queue->send(new SendMessage(self::TESTING_MESSAGE));
 
         /** @var ?Message $message */
         $message = $queue->read();
@@ -162,7 +164,7 @@ final class PgmqTest extends TestCase
     {
         $queue = $this->supervisor->createQueue($this->randomQueueName());
 
-        $messageId = $queue->send(self::TESTING_MESSAGE);
+        $messageId = $queue->send(new SendMessage(self::TESTING_MESSAGE));
 
         /** @var ?Message $message */
         $message = $queue->read();
@@ -178,7 +180,10 @@ final class PgmqTest extends TestCase
     {
         $queue = $this->supervisor->createQueue($this->randomQueueName());
 
-        $messageIds = $queue->sendBatch([self::TESTING_MESSAGE, self::TESTING_MESSAGE]);
+        $messageIds = $queue->sendBatch([
+            new SendMessage(self::TESTING_MESSAGE, self::TESTING_HEADERS),
+            new SendMessage(self::TESTING_MESSAGE, self::TESTING_HEADERS),
+        ]);
         self::assertCount(2, $messageIds);
 
         $messages = [...$queue->readBatch(2)];
@@ -187,6 +192,7 @@ final class PgmqTest extends TestCase
         /** @var Message $message */
         foreach ($messages as $message) {
             self::assertSame(self::TESTING_MESSAGE, $message->value);
+            self::assertSame(self::TESTING_HEADERS, $message->headers);
         }
 
         self::assertCount(0, [...$queue->readBatch(2)]);
@@ -196,7 +202,7 @@ final class PgmqTest extends TestCase
     {
         $queue = $this->supervisor->createQueue($this->randomQueueName());
 
-        $messageId = $queue->send(self::TESTING_MESSAGE);
+        $messageId = $queue->send(new SendMessage(self::TESTING_MESSAGE));
 
         $message = $queue->pop();
         self::assertNotNull($message);
@@ -208,7 +214,7 @@ final class PgmqTest extends TestCase
     {
         $queue = $this->supervisor->createQueue($this->randomQueueName());
 
-        $queue->send(self::TESTING_MESSAGE);
+        $queue->send(new SendMessage(self::TESTING_MESSAGE));
 
         $messages = [...$queue->readPoll()];
         self::assertCount(1, $messages);
@@ -219,7 +225,10 @@ final class PgmqTest extends TestCase
     {
         $queue = $this->supervisor->createQueue($this->randomQueueName());
 
-        $messageIds = $queue->sendBatch([self::TESTING_MESSAGE, self::TESTING_MESSAGE]);
+        $messageIds = $queue->sendBatch([
+            new SendMessage(self::TESTING_MESSAGE),
+            new SendMessage(self::TESTING_MESSAGE),
+        ]);
         $queue->archiveBatch($messageIds);
 
         $messages = [...$queue->readBatch(2)];
@@ -230,11 +239,27 @@ final class PgmqTest extends TestCase
     {
         $queue = $this->supervisor->createQueue($this->randomQueueName());
 
-        $messageIds = $queue->sendBatch([self::TESTING_MESSAGE, self::TESTING_MESSAGE]);
+        $messageIds = $queue->sendBatch([
+            new SendMessage(self::TESTING_MESSAGE),
+            new SendMessage(self::TESTING_MESSAGE),
+        ]);
         $queue->deleteBatch($messageIds);
 
         $messages = [...$queue->readBatch(2)];
         self::assertCount(0, $messages);
+    }
+
+    public function testPurgeQueue(): void
+    {
+        $queue = $this->supervisor->createQueue($this->randomQueueName());
+
+        $queue->send(new SendMessage(self::TESTING_MESSAGE));
+
+        self::assertSame(1, $queue->metrics()->length);
+
+        self::assertSame(1, $queue->purge());
+
+        self::assertSame(0, $queue->metrics()->length);
     }
 
     /**

@@ -13,7 +13,7 @@ $postgres = new PostgresConnectionPool(PostgresConfig::fromString('host=pgmq use
 $transaction = $postgres->beginTransaction();
 
 $queue = Pgmq\createQueue($transaction, 'outbox');
-$queue->send('{"id": 1}');
+$queue->send(new Pgmq\SendMessage('{"id": 1}'));
 $transaction->rollback();
 
 Pgmq\queueMetrics($postgres, 'outbox'); // exception will trigger
