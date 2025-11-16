@@ -31,7 +31,10 @@
     "autoload": {
         "psr-4": {
             "Thesis\\Pgmq\\": "src/"
-        }
+        },
+        "files": [
+            "src/pgmq.php"
+        ]
     },
     "autoload-dev": {
         "psr-4": {

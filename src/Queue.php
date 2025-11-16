@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Thesis\Pgmq;
 
+use Amp\Postgres\PostgresLink;
 use Thesis\Time\TimeSpan;
 
 /**
@@ -16,17 +17,17 @@ final readonly class Queue
      */
     public function __construct(
         public string $name,
-        private Supervisor $supervisor,
+        private PostgresLink $pg,
     ) {}
 
     public function drop(): bool
     {
-        return $this->supervisor->dropQueue($this->name);
+        return dropQueue($this->pg, $this->name);
     }
 
     public function purge(): int
     {
-        return $this->supervisor->purgeQueue($this->name);
+        return purgeQueue($this->pg, $this->name);
     }
 
     /**
@@ -34,7 +35,7 @@ final readonly class Queue
      */
     public function metrics(): QueueMetric
     {
-        return $this->supervisor->queueMetrics($this->name);
+        return queueMetrics($this->pg, $this->name);
     }
 
     /**
@@ -42,7 +43,7 @@ final readonly class Queue
      */
     public function metadata(): QueueMetadata
     {
-        return $this->supervisor->queueMetadata($this->name);
+        return queueMetadata($this->pg, $this->name);
     }
 
     /**
@@ -51,7 +52,7 @@ final readonly class Queue
      */
     public function send(string $json, null|TimeSpan|\DateTimeImmutable $delay = null): int
     {
-        return $this->supervisor->send($this->name, $json, $delay);
+        return send($this->pg, $this->name, $json, $delay);
     }
 
     /**
@@ -60,7 +61,7 @@ final readonly class Queue
      */
     public function sendBatch(array $messages, null|TimeSpan|\DateTimeImmutable $delay = null): array
     {
-        return $this->supervisor->sendBatch($this->name, $messages, $delay);
+        return sendBatch($this->pg, $this->name, $messages, $delay);
     }
 
     /**
@@ -73,12 +74,12 @@ final readonly class Queue
         ?TimeSpan $maxPoll = null,
         ?TimeSpan $pollInterval = null,
     ): iterable {
-        return $this->supervisor->readPoll($this->name, $batch, $visibilityTimeout, $maxPoll, $pollInterval);
+        return readPoll($this->pg, $this->name, $batch, $visibilityTimeout, $maxPoll, $pollInterval);
     }
 
     public function read(?TimeSpan $visibilityTimeout = null): ?Message
     {
-        return $this->supervisor->read($this->name, $visibilityTimeout);
+        return read($this->pg, $this->name, $visibilityTimeout);
     }
 
     /**
@@ -87,17 +88,17 @@ final readonly class Queue
      */
     public function readBatch(int $count, ?TimeSpan $visibilityTimeout = null): iterable
     {
-        return $this->supervisor->readBatch($this->name, $count, $visibilityTimeout);
+        return readBatch($this->pg, $this->name, $count, $visibilityTimeout);
     }
 
     public function pop(): ?Message
     {
-        return $this->supervisor->pop($this->name);
+        return pop($this->pg, $this->name);
     }
 
     public function archive(int $messageId): bool
     {
-        return $this->supervisor->archive($this->name, $messageId);
+        return archive($this->pg, $this->name, $messageId);
     }
 
     /**
@@ -106,17 +107,17 @@ final readonly class Queue
      */
     public function archiveBatch(array $messageIds): array
     {
-        return $this->supervisor->archiveBatch($this->name, $messageIds);
+        return archiveBatch($this->pg, $this->name, $messageIds);
     }
 
     public function detachArchive(): void
     {
-        $this->supervisor->detachArchive($this->name);
+        detachArchive($this->pg, $this->name);
     }
 
     public function delete(int $messageId): bool
     {
-        return $this->supervisor->delete($this->name, $messageId);
+        return delete($this->pg, $this->name, $messageId);
     }
 
     /**
@@ -125,11 +126,11 @@ final readonly class Queue
      */
     public function deleteBatch(array $messageIds): array
     {
-        return $this->supervisor->deleteBatch($this->name, $messageIds);
+        return deleteBatch($this->pg, $this->name, $messageIds);
     }
 
     public function setVisibilityTimeout(int $messageId, TimeSpan $visibilityTimeout): ?Message
     {
-        return $this->supervisor->setVisibilityTimeout($this->name, $messageId, $visibilityTimeout);
+        return setVisibilityTimeout($this->pg, $this->name, $messageId, $visibilityTimeout);
     }
 }
