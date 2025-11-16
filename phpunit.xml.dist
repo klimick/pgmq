@@ -12,6 +12,7 @@
     <php>
         <ini name="display_errors" value="1"/>
         <ini name="error_reporting" value="-1"/>
+        <env name="THESIS_PGMQ_DSN" value="host=pgmq user=postgres password=postgres" />
     </php>
 
     <testsuites>
