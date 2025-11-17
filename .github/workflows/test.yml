@@ -18,8 +18,8 @@ jobs:
           docker run -d \
             --name pgmq-postgres \
             -p 5432:5432 \
-            -e POSTGRES_PASSWORD=postgres
-            ghcr.io/pgmq/pg18-pgmq:v1.7.0 \
+            -e POSTGRES_PASSWORD=postgres \
+            ghcr.io/pgmq/pg18-pgmq:v1.7.0
       - uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ matrix.php }}
