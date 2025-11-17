@@ -453,7 +453,7 @@ $queue->disableNotifyInsert();
 
 ### Consume messages
 
-This functionality is not a standard feature of the **pgmq** extension, but is provided by the library as an add-on for reliable and correct processing of message batches from the queue, with the ability to `ack`, `nack` (with delay) and delete (`term`) messages from the queue.
+This functionality is not a standard feature of the **pgmq** extension, but is provided by the library as an add-on for reliable and correct processing of message batches from the queue, with the ability to `ack`, `nack` (with delay) and archive (`term`) messages from the queue.
 
 1. First of all, create the extension if it doesn't exist yet:
 
@@ -589,5 +589,28 @@ $context = $consumer->consume(
 trapSignal([\SIGINT, \SIGTERM])
 
 $context->stop();
+$context->awaitCompletion();
+```
+
+Or stop all current consumers using `$consumer->stop()`:
+
+```php
+<?php
+
+declare(strict_types=1);
+
+use Thesis\Pgmq;
+use function Amp\trapSignal;
+
+Pgmq\createExtension($pg);
+Pgmq\createQueue($pg, 'events');
+
+$consumer = Pgmq\createConsumer($pg);
+
+$context = $consumer->consume(...);
+
+trapSignal([\SIGINT, \SIGTERM])
+
+$consumer->stop();
 $context->awaitCompletion();
 ```
