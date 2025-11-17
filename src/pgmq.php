@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Thesis\Pgmq;
 
+use Amp\Postgres\PostgresConnection;
 use Amp\Postgres\PostgresLink;
 use Amp\Postgres\PostgresQueryError;
 use Thesis\Time\TimeSpan;
@@ -61,6 +62,19 @@ function createUnloggedQueue(
 }
 
 /**
+ * @param non-empty-string $queue
+ * @throws QueueNotFound
+ */
+function findQueue(
+    PostgresLink $pg,
+    string $queue,
+): Queue {
+    $md = queueMetadata($pg, $queue);
+
+    return new Queue($md->name, $pg);
+}
+
+/**
  * @api
  * @param non-empty-string $queue
  * @param non-negative-int|non-empty-string $partitionInterval this can be either any valid Postgres Duration supported by pg_partman, or an integer value
@@ -69,8 +83,8 @@ function createUnloggedQueue(
 function createPartitionedQueue(
     PostgresLink $pg,
     string $queue,
-    int|string $partitionInterval,
-    int|string $retentionInterval,
+    int|string $partitionInterval = 10_000,
+    int|string $retentionInterval = 100_000,
 ): Queue {
     $pg->execute('SELECT pgmq.create(:queue_name, :partition_interval, :retention_interval)', [
         'queue_name' => $queue,
@@ -217,7 +231,7 @@ function send(
             'queue_name' => $queue,
             'msg' => $message->valueJson,
             'headers' => $message->headerJson,
-            'delay' => $delay instanceof TimeSpan ? (int) $delay->toSeconds(PHP_ROUND_HALF_UP) : $delay->format(\DateTimeInterface::RFC3339),
+            'delay' => $delay instanceof TimeSpan ? (int) $delay->toSeconds() : $delay->format(\DateTimeInterface::RFC3339),
         ])
         ->fetchRow() ?? throw new \RuntimeException("Failed to send message to the queue {$queue}.");
 
@@ -247,7 +261,7 @@ function sendBatch(
         'queue_name' => $queue,
         'msgs' => array_map(static fn(SendMessage $message): string => $message->valueJson, $messages),
         'headers' => array_map(static fn(SendMessage $message): ?string => $message->headerJson, $messages),
-        'delay' => $delay instanceof TimeSpan ? $delay->toSeconds(PHP_ROUND_HALF_UP) : $delay->format(\DateTimeInterface::RFC3339),
+        'delay' => $delay instanceof TimeSpan ? $delay->toSeconds() : $delay->format(\DateTimeInterface::RFC3339),
     ]);
 
     $messageIds = [];
@@ -276,10 +290,10 @@ function readPoll(
 ): iterable {
     $result = $pg->execute('SELECT * FROM pgmq.read_with_poll(:queue_name, :vt, :limit, :poll_timeout_s, :poll_interval_ms);', [
         'queue_name' => $queue,
-        'vt' => ($visibilityTimeout ?? TimeSpan::fromSeconds(30))->toSeconds(PHP_ROUND_HALF_UP),
+        'vt' => ($visibilityTimeout ?? TimeSpan::fromSeconds(30))->toSeconds(),
         'limit' => $batch,
-        'poll_timeout_s' => ($maxPoll ?? TimeSpan::fromSeconds(5))->toSeconds(PHP_ROUND_HALF_UP),
-        'poll_interval_ms' => ($pollInterval ?? TimeSpan::fromMilliseconds(250))->toMilliseconds(PHP_ROUND_HALF_UP),
+        'poll_timeout_s' => ($maxPoll ?? TimeSpan::fromSeconds(5))->toSeconds(),
+        'poll_interval_ms' => ($pollInterval ?? TimeSpan::fromMilliseconds(250))->toMilliseconds(),
     ]);
 
     foreach ($result as $row) {
@@ -319,7 +333,7 @@ function readBatch(
 
     $result = $pg->execute('SELECT * FROM pgmq.read(:queue_name, :vt, :limit)', [
         'queue_name' => $queue,
-        'vt' => $visibilityTimeout->toSeconds(PHP_ROUND_HALF_UP),
+        'vt' => $visibilityTimeout->toSeconds(),
         'limit' => $count,
     ]);
 
@@ -435,7 +449,7 @@ function setVisibilityTimeout(
         ->execute('SELECT * FROM pgmq.set_vt(:queue_name, :msg_id::bigint, :vt::int)', [
             'queue_name' => $queue,
             'msg_id' => $messageId,
-            'vt' => $visibilityTimeout->toSeconds(PHP_ROUND_HALF_UP),
+            'vt' => $visibilityTimeout->toSeconds(),
         ])
         ->fetchRow();
 
@@ -455,7 +469,7 @@ function enableNotifyInsert(
     // Add the parameter ":throttle_interval_ms" when extension version v1.8.0 is released.
     $pg->execute('SELECT pgmq.enable_notify_insert(:queue_name)', [
         'queue_name' => $queue,
-        'throttle_interval_ms' => ($throttleInterval ?? TimeSpan::fromMilliseconds(30))->toMilliseconds(PHP_ROUND_HALF_UP),
+        'throttle_interval_ms' => ($throttleInterval ?? TimeSpan::fromMilliseconds(30))->toMilliseconds(),
     ]);
 
     return channelName($queue);
@@ -482,4 +496,13 @@ function disableNotifyInsert(
 function channelName(string $queue): string
 {
     return "pgmq.q_{$queue}.INSERT";
+}
+
+/**
+ * @api
+ */
+function createConsumer(
+    PostgresConnection $pg,
+): Consumer {
+    return new Consumer($pg);
 }

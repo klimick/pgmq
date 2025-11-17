@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Thesis\Pgmq;
 
+use Amp\Postgres\PostgresConfig;
+use Amp\Postgres\PostgresConnection;
+use Amp\Postgres\PostgresConnectionPool;
 use Amp\Postgres\PostgresQueryError;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
@@ -17,6 +20,8 @@ final class PgmqTest extends TestCase
     private const string TESTING_MESSAGE = '{"ping": "pong"}';
     private const string TESTING_HEADERS = '{"x": "y"}';
 
+    private PostgresConnection $pg;
+
     private Supervisor $supervisor;
 
     protected function setUp(): void
@@ -29,7 +34,8 @@ final class PgmqTest extends TestCase
             self::markTestSkipped('Set the THESIS_PGMQ_DSN environment variable.');
         }
 
-        $this->supervisor = Supervisor::fromDsn($dsn);
+        $this->pg = new PostgresConnectionPool(PostgresConfig::fromString($dsn));
+        $this->supervisor = new Supervisor($this->pg);
 
         foreach ($this->supervisor->listQueues() as $queue) {
             $queue->drop();
@@ -118,7 +124,7 @@ final class PgmqTest extends TestCase
 
         self::assertNull($queue->read());
 
-        delay($delay->add(TimeSpan::fromMilliseconds(50))->toSeconds(PHP_ROUND_HALF_UP));
+        delay($delay->add(TimeSpan::fromMilliseconds(50))->toSeconds());
 
         /** @var ?Message $message */
         $message = $queue->read();
@@ -269,6 +275,56 @@ final class PgmqTest extends TestCase
         self::assertSame(channelName($queue->name), $queue->enableNotifyInsert());
 
         $queue->disableNotifyInsert();
+    }
+
+    public function testInvalidConsumerConfiguration(): void
+    {
+        $queue = createQueue($this->pg, $this->randomQueueName());
+        $consumer = createConsumer($this->pg);
+
+        self::expectException(\LogicException::class);
+        self::expectExceptionMessage('At least one watcher must be configured. Either set a positive $pollInterval or enable $listenForInserts or both.');
+        $consumer->consume(static fn() => null, new ConsumeConfig(
+            queue: $queue->name,
+            pollInterval: TimeSpan::fromSeconds(0),
+            listenForInserts: false,
+        ));
+    }
+
+    public function testConsumeBatch(): void
+    {
+        $queue = createQueue($this->pg, $this->randomQueueName());
+        $messageIds = $queue->sendBatch([
+            new SendMessage(self::TESTING_MESSAGE),
+            new SendMessage(self::TESTING_MESSAGE),
+        ]);
+
+        self::assertCount(2, $messageIds);
+        self::assertSame(2, $queue->metrics()->length);
+
+        /** @var array<non-negative-int, non-empty-string> $consumed */
+        $consumed = [];
+
+        $consumer = createConsumer($this->pg);
+        $context = $consumer->consume(
+            static function (array $messages, ConsumeController $ctrl) use (&$consumed): void {
+                /** @var Message $message */
+                foreach ($messages as $message) {
+                    $consumed[$message->id] = $message->value;
+                }
+
+                $ctrl->ack($messages);
+                $ctrl->stop();
+            },
+            new ConsumeConfig($queue->name),
+        );
+
+        $context->awaitCompletion();
+
+        self::assertCount(2, $consumed);
+        self::assertEquals($messageIds, array_keys($consumed));
+        self::assertEquals([self::TESTING_MESSAGE, self::TESTING_MESSAGE], array_values($consumed));
+        self::assertSame(0, $queue->metrics()->length);
     }
 
     /**

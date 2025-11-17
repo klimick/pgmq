@@ -7,3 +7,587 @@ Non-blocking php client for [pgmq](https://github.com/pgmq/pgmq).
 ```shell
 composer require thesis/pgmq
 ```
+
+## Contents
+ - [Create queue](#create-queue)
+ - [Create unlogged queue](#create-unlogged-queue)
+ - [Create partitioned queue](#create-partitioned-queue)
+ - [List queues](#list-queues)
+ - [List queue metrics](#list-queue-metrics)
+ - [List queue metadata](#list-queue-metadata)
+ - [Drop queue](#drop-queue)
+ - [Purge queue](#purge-queue)
+ - [Send message](#send-message)
+ - [Send message with relative delay](#send-message-with-relative-delay)
+ - [Send message with absolute delay](#send-message-with-absolute-delay)
+ - [Send batch](#send-batch)
+ - [Send batch with relative delay](#send-batch-with-relative-delay)
+ - [Send batch with absolute delay](#send-batch-with-absolute-delay)
+ - [Read message](#read-message)
+ - [Read batch](#read-batch)
+ - [Pop message](#pop-message)
+ - [Read batch with poll](#read-batch-with-poll)
+ - [Set visibility timeout](#set-visibility-timeout)
+ - [Archive message](#archive-message)
+ - [Archive batch](#archive-batch)
+ - [Delete message](#delete-message)
+ - [Delete batch](#delete-batch)
+ - [Enable notify insert](#enable-notify-insert)
+ - [Disable notify insert](#disable-notify-insert)
+ - [Consume messages](#consume-messages)
+
+### Create queue
+
+```php
+<?php
+
+use Thesis\Pgmq;
+use Amp\Postgres;
+
+$pg = new Postgres\PostgresConnectionPool(Postgres\PostgresConfig::fromString(''));
+
+$queue = Pgmq\createQueue($pg, 'events');
+```
+
+### Create unlogged queue
+
+```php
+<?php
+
+use Thesis\Pgmq;
+use Amp\Postgres;
+
+$pg = new Postgres\PostgresConnectionPool(Postgres\PostgresConfig::fromString(''));
+
+$queue = Pgmq\createUnloggedQueue($pg, 'events');
+```
+
+### Create partitioned queue
+
+```php
+<?php
+
+use Thesis\Pgmq;
+use Amp\Postgres;
+
+$pg = new Postgres\PostgresConnectionPool(Postgres\PostgresConfig::fromString(''));
+
+$queue = Pgmq\createPartitionedQueue(
+    pg: $pg,
+    queue: 'events',
+    partitionInterval: 10000,
+    retentionInterval: 100000,
+);
+```
+
+### List queues
+
+```php
+<?php
+
+use Thesis\Pgmq;
+use Amp\Postgres;
+
+$pg = new Postgres\PostgresConnectionPool(Postgres\PostgresConfig::fromString(''));
+
+foreach (Pgmq\listQueues($pg) as $queue) {
+    $md = $queue->metadata();
+    var_dump($md);
+}
+```
+
+### List queue metrics
+
+```php
+<?php
+
+use Thesis\Pgmq;
+use Amp\Postgres;
+
+$pg = new Postgres\PostgresConnectionPool(Postgres\PostgresConfig::fromString(''));
+
+foreach (Pgmq\metrics($pg) as $metrics) {
+    var_dump($metrics);
+}
+```
+
+### List queue metadata
+
+```php
+<?php
+
+use Thesis\Pgmq;
+use Amp\Postgres;
+
+$pg = new Postgres\PostgresConnectionPool(Postgres\PostgresConfig::fromString(''));
+
+foreach (Pgmq\listQueueMetadata($pg) as $md) {
+    var_dump($md);
+}
+```
+
+### Drop queue
+
+```php
+<?php
+
+use Thesis\Pgmq;
+use Amp\Postgres;
+
+$pg = new Postgres\PostgresConnectionPool(Postgres\PostgresConfig::fromString(''));
+
+$queue = Pgmq\createQueue($pg, 'events');
+$queue->drop();
+```
+
+### Purge queue
+
+```php
+<?php
+
+use Thesis\Pgmq;
+use Amp\Postgres;
+
+$pg = new Postgres\PostgresConnectionPool(Postgres\PostgresConfig::fromString(''));
+
+$queue = Pgmq\createQueue($pg, 'events');
+var_dump($queue->purge());
+```
+
+### Send message
+
+```php
+<?php
+
+use Thesis\Pgmq;
+use Amp\Postgres;
+
+$pg = new Postgres\PostgresConnectionPool(Postgres\PostgresConfig::fromString(''));
+
+$queue = Pgmq\createQueue($pg, 'events');
+$messageId = $queue->send(new Pgmq\SendMessage('{"id": 1}', '{"x-header": "x-value"}'));
+```
+
+### Send message with relative delay
+
+```php
+<?php
+
+use Thesis\Pgmq;
+use Amp\Postgres;
+use Thesis\Time\TimeSpan;
+
+$pg = new Postgres\PostgresConnectionPool(Postgres\PostgresConfig::fromString(''));
+
+$queue = Pgmq\createQueue($pg, 'events');
+$messageId = $queue->send(
+    new Pgmq\SendMessage('{"id": 1}', '{"x-header": "x-value"}'),
+    TimeSpan::fromSeconds(5),
+);
+```
+
+### Send message with absolute delay
+
+```php
+<?php
+
+use Thesis\Pgmq;
+use Amp\Postgres;
+
+$pg = new Postgres\PostgresConnectionPool(Postgres\PostgresConfig::fromString(''));
+
+$queue = Pgmq\createQueue($pg, 'events');
+$messageId = $queue->send(
+    new Pgmq\SendMessage('{"id": 1}', '{"x-header": "x-value"}'),
+    new \DateTimeImmutable('+5 seconds'),
+);
+```
+
+### Send batch
+
+```php
+<?php
+
+use Thesis\Pgmq;
+use Amp\Postgres;
+
+$pg = new Postgres\PostgresConnectionPool(Postgres\PostgresConfig::fromString(''));
+
+$queue = Pgmq\createQueue($pg, 'events');
+$messageIds = $queue->sendBatch([
+    new Pgmq\SendMessage('{"id": 1}', '{"x-header": "x-value"}'),
+    new Pgmq\SendMessage('{"id": 2}', '{"x-header": "x-value"}'),
+]);
+```
+
+### Send batch with relative delay
+
+```php
+<?php
+
+use Thesis\Pgmq;
+use Amp\Postgres;
+use Thesis\Time\TimeSpan;
+
+$pg = new Postgres\PostgresConnectionPool(Postgres\PostgresConfig::fromString(''));
+
+$queue = Pgmq\createQueue($pg, 'events');
+$messageIds = $queue->sendBatch(
+    [
+        new Pgmq\SendMessage('{"id": 1}', '{"x-header": "x-value"}'),
+        new Pgmq\SendMessage('{"id": 2}', '{"x-header": "x-value"}'),
+    ],
+    TimeSpan::fromSeconds(5),
+);
+```
+
+### Send batch with absolute delay
+
+```php
+<?php
+
+use Thesis\Pgmq;
+use Amp\Postgres;
+
+$pg = new Postgres\PostgresConnectionPool(Postgres\PostgresConfig::fromString(''));
+
+$queue = Pgmq\createQueue($pg, 'events');
+$messageIds = $queue->sendBatch(
+    [
+        new Pgmq\SendMessage('{"id": 1}', '{"x-header": "x-value"}'),
+        new Pgmq\SendMessage('{"id": 2}', '{"x-header": "x-value"}'),
+    ],
+    new \DateTimeImmutable('+5 seconds'),
+);
+```
+
+### Read message
+
+```php
+<?php
+
+use Thesis\Pgmq;
+use Amp\Postgres;
+use Thesis\Time\TimeSpan;
+
+$pg = new Postgres\PostgresConnectionPool(Postgres\PostgresConfig::fromString(''));
+
+$queue = Pgmq\createQueue($pg, 'events');
+$message = $queue->read(TimeSpan::fromSeconds(20));
+```
+
+### Read batch
+
+```php
+<?php
+
+use Thesis\Pgmq;
+use Amp\Postgres;
+use Thesis\Time\TimeSpan;
+
+$pg = new Postgres\PostgresConnectionPool(Postgres\PostgresConfig::fromString(''));
+
+$queue = Pgmq\createQueue($pg, 'events');
+$message = $queue->readBatch(10, TimeSpan::fromSeconds(20));
+```
+
+### Pop message
+
+```php
+<?php
+
+use Thesis\Pgmq;
+use Amp\Postgres;
+
+$pg = new Postgres\PostgresConnectionPool(Postgres\PostgresConfig::fromString(''));
+
+$queue = Pgmq\createQueue($pg, 'events');
+$message = $queue->pop();
+```
+
+### Read batch with poll
+
+```php
+<?php
+
+use Thesis\Pgmq;
+use Amp\Postgres;
+use Thesis\Time\TimeSpan;
+
+$pg = new Postgres\PostgresConnectionPool(Postgres\PostgresConfig::fromString(''));
+
+$queue = Pgmq\createQueue($pg, 'events');
+$messages = $queue->readPoll(
+    batch: 10,
+    maxPoll: TimeSpan::fromSeconds(5),
+    pollInterval: TimeSpan::fromMilliseconds(250),
+);
+```
+
+### Set visibility timeout
+
+```php
+<?php
+
+use Thesis\Pgmq;
+use Amp\Postgres;
+use Thesis\Time\TimeSpan;
+
+$pg = new Postgres\PostgresConnectionPool(Postgres\PostgresConfig::fromString(''));
+
+$queue = Pgmq\createQueue($pg, 'events');
+$message = $queue->read();
+
+if ($message !== null) {
+    // handle the message
+
+    $queue->setVisibilityTimeout($message->id, TimeSpan::fromSeconds(10));
+}
+```
+
+### Archive message
+
+```php
+<?php
+
+use Thesis\Pgmq;
+use Amp\Postgres;
+
+$pg = new Postgres\PostgresConnectionPool(Postgres\PostgresConfig::fromString(''));
+
+$queue = Pgmq\createQueue($pg, 'events');
+$message = $queue->read();
+
+if ($message !== null) {
+    $queue->archive($message->id);
+}
+```
+
+### Archive batch
+
+```php
+<?php
+
+use Thesis\Pgmq;
+use Amp\Postgres;
+
+$pg = new Postgres\PostgresConnectionPool(Postgres\PostgresConfig::fromString(''));
+
+$queue = Pgmq\createQueue($pg, 'events');
+$messages = [...$queue->readBatch(5)];
+
+if ($messages !== []) {
+    $queue->archiveBatch(array_map(
+        static fn(Pgmq\Message $message): int => $messages->id),
+        $messages,
+    );
+}
+```
+
+### Delete message
+
+```php
+<?php
+
+use Thesis\Pgmq;
+use Amp\Postgres;
+
+$pg = new Postgres\PostgresConnectionPool(Postgres\PostgresConfig::fromString(''));
+
+$queue = Pgmq\createQueue($pg, 'events');
+$message = $queue->read();
+
+if ($message !== null) {
+    $queue->delete($message->id);
+}
+```
+
+### Delete batch
+
+```php
+<?php
+
+use Thesis\Pgmq;
+use Amp\Postgres;
+
+$pg = new Postgres\PostgresConnectionPool(Postgres\PostgresConfig::fromString(''));
+
+$queue = Pgmq\createQueue($pg, 'events');
+$messages = [...$queue->readBatch(5)];
+
+if ($messages !== []) {
+    $queue->deleteBatch(array_map(
+        static fn(Pgmq\Message $message): int => $messages->id),
+        $messages,
+    );
+}
+```
+
+### Enable notify insert
+
+```php
+<?php
+
+use Thesis\Pgmq;
+use Amp\Postgres;
+
+$pg = new Postgres\PostgresConnectionPool(Postgres\PostgresConfig::fromString(''));
+
+$queue = Pgmq\createQueue($pg, 'events');
+$channel = $queue->enableNotifyInsert(); // postgres channel to listen is returned
+```
+
+### Disable notify insert
+
+```php
+<?php
+
+use Thesis\Pgmq;
+use Amp\Postgres;
+
+$pg = new Postgres\PostgresConnectionPool(Postgres\PostgresConfig::fromString(''));
+
+$queue = Pgmq\createQueue($pg, 'events');
+$queue->disableNotifyInsert();
+```
+
+### Consume messages
+
+This functionality is not a standard feature of the **pgmq** extension, but is provided by the library as an add-on for reliable and correct processing of message batches from the queue, with the ability to `ack`, `nack` (with delay) and delete (`term`) messages from the queue.
+
+1. First of all, create the extension if it doesn't exist yet:
+
+```php
+<?php
+
+declare(strict_types=1);
+
+use Thesis\Pgmq;
+
+Pgmq\createExtension($pg);
+```
+
+2. Then create a queue:
+
+```php
+<?php
+
+declare(strict_types=1);
+
+use Thesis\Pgmq;
+
+Pgmq\createExtension($pg);
+Pgmq\createQueue($pg, 'events');
+```
+
+3. Next, create the consumer object:
+
+```php
+<?php
+
+declare(strict_types=1);
+
+use Thesis\Pgmq;
+
+Pgmq\createExtension($pg);
+Pgmq\createQueue($pg, 'events');
+
+$consumer = Pgmq\createConsumer($pg);
+```
+
+4. Now we can proceed to configure the queue consumer handler:
+
+```php
+<?php
+
+declare(strict_types=1);
+
+use Thesis\Pgmq;
+
+Pgmq\createExtension($pg);
+Pgmq\createQueue($pg, 'events');
+
+$consumer = Pgmq\createConsumer($pg);
+
+$context = $consumer->consume(
+    static function (array $messages, Pgmq\ConsumeController $ctrl): void {
+        var_dump($messages);
+        $ctrl->ack($messages);
+    },
+    new Pgmq\ConsumeConfig(
+        queue: 'events',
+    ),
+);
+```
+
+Through `Pgmq\ConsumeConfig` you can configure:
+
+- the `batch` size of received messages;
+- the message visibility timeout;
+- enable monitoring for queue inserts via the LISTEN/NOTIFY mechanism;
+- and set the polling interval.
+
+At least one of these settings — `listenForInserts` or `pollTimeout` — must be specified.
+
+Through the `Pgmq\ConsumeController`, you can:
+- ack messages, causing them to be deleted from the queue;
+- nack messages with a delay, setting a visibility timeout for them;
+- terminate processing (when a message can no longer be retried), resulting in them being archived;
+- stop the consumer.
+
+Since receiving messages and `acking/nacking` them occur within the same transaction, for your own database queries you must use the `ConsumeController::$tx` object to ensure exactly-once semantics for message processing.
+
+```php
+<?php
+
+declare(strict_types=1);
+
+use Thesis\Pgmq;
+
+Pgmq\createExtension($pg);
+Pgmq\createQueue($pg, 'events');
+
+$consumer = Pgmq\createConsumer($pg);
+
+$context = $consumer->consume(
+    static function (array $messages, Pgmq\ConsumeController $ctrl): void {
+        $ctrl->tx->execute('...some business logic');
+        $ctrl->ack($messages);
+    },
+    new Pgmq\ConsumeConfig(
+        queue: 'events',
+    ),
+);
+```
+
+Using `ConsumeContext`, you can gracefully stop the consumer, waiting for the current batch to finish processing.
+
+
+```php
+<?php
+
+declare(strict_types=1);
+
+use Thesis\Pgmq;
+use function Amp\trapSignal;
+
+Pgmq\createExtension($pg);
+Pgmq\createQueue($pg, 'events');
+
+$consumer = Pgmq\createConsumer($pg);
+
+$context = $consumer->consume(
+    static function (array $messages, Pgmq\ConsumeController $ctrl): void {
+        $ctrl->tx->execute('...some business logic');
+        $ctrl->ack($messages);
+    },
+    new Pgmq\ConsumeConfig(
+        queue: 'events',
+    ),
+);
+
+trapSignal([\SIGINT, \SIGTERM])
+
+$context->stop();
+$context->awaitCompletion();
+```
