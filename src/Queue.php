@@ -193,11 +193,12 @@ final readonly class Queue
     /**
      * @return non-empty-string
      */
-    public function enableNotifyInsert(): string
+    public function enableNotifyInsert(?TimeSpan $throttleInterval = null): string
     {
         return enableNotifyInsert(
             pg: $this->pg,
             queue: $this->name,
+            throttleInterval: $throttleInterval,
         );
     }
 

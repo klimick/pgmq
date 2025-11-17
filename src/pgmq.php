@@ -450,9 +450,12 @@ function setVisibilityTimeout(
 function enableNotifyInsert(
     PostgresLink $pg,
     string $queue,
+    ?TimeSpan $throttleInterval = null,
 ): string {
+    // Add the parameter ":throttle_interval_ms" when extension version v1.8.0 is released.
     $pg->execute('SELECT pgmq.enable_notify_insert(:queue_name)', [
         'queue_name' => $queue,
+        'throttle_interval_ms' => ($throttleInterval ?? TimeSpan::fromMilliseconds(30))->toMilliseconds(PHP_ROUND_HALF_UP),
     ]);
 
     return channelName($queue);
@@ -472,6 +475,7 @@ function disableNotifyInsert(
 }
 
 /**
+ * @api
  * @param non-empty-string $queue
  * @return non-empty-string
  */
