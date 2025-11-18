@@ -4,11 +4,12 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../vendor/autoload.php';
 
+use Amp\Postgres;
 use Thesis\Pgmq;
 
-$supervisor = Pgmq\Supervisor::fromDsn('host=pgmq user=postgres password=postgres');
+$pg = new Postgres\PostgresConnectionPool(Postgres\PostgresConfig::fromString('host=pgmq user=postgres password=postgres'));
 
-$queue = $supervisor->createQueue('events');
+$queue = Pgmq\createQueue($pg, 'events');
 
 $queue->send(new Pgmq\SendMessage('{"id": 1}'));
 

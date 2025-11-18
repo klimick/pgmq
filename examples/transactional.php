@@ -8,12 +8,18 @@ use Amp\Postgres\PostgresConfig;
 use Amp\Postgres\PostgresConnectionPool;
 use Thesis\Pgmq;
 
-$postgres = new PostgresConnectionPool(PostgresConfig::fromString('host=pgmq user=postgres password=postgres'));
+$pg = new PostgresConnectionPool(PostgresConfig::fromString('host=pgmq user=postgres password=postgres'));
 
-$transaction = $postgres->beginTransaction();
+Pgmq\dropQueue($pg, 'outbox');
+$queue = Pgmq\createQueue($pg, 'outbox');
 
-$queue = Pgmq\createQueue($transaction, 'outbox');
-$queue->send(new Pgmq\SendMessage('{"id": 1}'));
-$transaction->rollback();
+$tx = $pg->beginTransaction();
 
-Pgmq\queueMetrics($postgres, 'outbox'); // exception will trigger
+Pgmq\send($tx, $queue->name, new Pgmq\SendMessage('{"id": 1}'));
+Pgmq\send($tx, $queue->name, new Pgmq\SendMessage('{"id": 2}'));
+Pgmq\send($tx, $queue->name, new Pgmq\SendMessage('{"id": 3}'));
+
+$tx->rollback();
+
+$metrics = $queue->metrics();
+assert($metrics->length === 0, 'Queue should be empty.');
