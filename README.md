@@ -1,12 +1,19 @@
 # pgmq
 
-Non-blocking php client for [pgmq](https://github.com/pgmq/pgmq).
+Non-blocking php client for [pgmq](https://github.com/pgmq/pgmq). See the extension [installation guide](https://github.com/pgmq/pgmq/blob/main/INSTALLATION.md).
 
 ## Installation
 
 ```shell
 composer require thesis/pgmq
 ```
+
+## Why is almost all the API functional?
+
+Since you most likely expect exactly-once semantics from a database-based queue, all requests — sending or processing business logic with message acknowledgments — must be transactional.
+And the transaction object is short-lived: it cannot be used after `rollback()` or `commit()`, so it cannot be made a dependency.
+That's why all the API is built on functions that take `Amp\Postgres\PostgresLink` as their first parameter, which can be either a transaction object or just a connection.
+And only the consumer accepts `Amp\Postgres\PostgresConnection`, because it itself opens transactions for reading and acknowledging messages transactionally.
 
 ## Contents
  - [Create queue](#create-queue)
@@ -614,3 +621,7 @@ trapSignal([\SIGINT, \SIGTERM])
 $consumer->stop();
 $context->awaitCompletion();
 ```
+\
+## License
+
+The MIT License (MIT). Please see [License File](LICENSE) for more information.
